@@ -541,7 +541,8 @@ var loadImageAsync = function loadImageAsync(item, resolve, reject) {
     resolve({
       naturalHeight: image.naturalHeight,
       naturalWidth: image.naturalWidth,
-      src: image.src
+      src: image.src,
+      image: image
     });
   };
 
@@ -624,26 +625,63 @@ var ImageCache = function () {
       max: max || 100
     };
     this._caches = [];
+    this._contentCaches = {};
   }
 
   createClass(ImageCache, [{
+    key: 'dataUrl',
+    value: function dataUrl(image) {
+      var canvas = document.createElement('canvas');
+      canvas.width = image.width;
+      canvas.height = image.height;
+      var ctx = canvas.getContext('2d');
+      ctx.drawImage(image, 0, 0, image.width, image.height);
+      var ext = image.src.substring(image.src.lastIndexOf('.') + 1).toLowerCase();
+      return canvas.toDataURL('image/' + ext);
+    }
+  }, {
+    key: 'hashCode',
+    value: function hashCode(str) {
+        str = str.toString();
+        var hash = 0;
+        if (str.length == 0) {
+            return hash
+        };
+        for (var i = 0; i < str.length; i ++) {
+            var char = str.charCodeAt(i);
+            hash = ((hash << 5) - hash) + char;
+            hash = hash & hash; // Convert to 32bit integer
+        }
+        return hash;
+    }
+  }, {
     key: 'has',
-    value: function has(key) {
+    value: function has(url) {
+      var key = this.hashCode(url);
       return this._caches.indexOf(key) > -1;
     }
   }, {
     key: 'add',
-    value: function add(key) {
-      if (this.has(key)) return;
-      this._caches.push(key);
-      if (this._caches.length > this.options.max) {
+    value: function add(url, image) {
+        if (this.has(url)) return;
+        var key = this.hashCode(url);
+        this._caches.push(key);
+        this._contentCaches[key] = this.dataUrl(image);
+        if (this._caches.length > this.options.max) {
         this.free();
-      }
+        }
+    }
+  }, {
+    key: 'get',
+    value: function get(url) {
+        var key = this.hashCode(url);
+        return this._contentCaches[key];
     }
   }, {
     key: 'free',
     value: function free() {
-      this._caches.shift();
+        var old = this._caches.shift();
+        this._contentCaches[old] = undefined;
     }
   }]);
   return ImageCache;
@@ -858,10 +896,10 @@ var ReactiveListener = function () {
           _this3.naturalWidth = data.naturalWidth;
           _this3.state.loaded = true;
           _this3.state.error = false;
+          _this3._imageCache.add(_this3.src, data.image);
           _this3.record('loadEnd');
           _this3.render('loaded', false);
           _this3.state.rendered = true;
-          _this3._imageCache.add(_this3.src);
           onFinish();
         }, function (err) {
           !_this3.options.silent && console.error(err);
@@ -1422,7 +1460,7 @@ var Lazy = function (Vue) {
             src = listener.error;
             break;
           default:
-            src = listener.src;
+            src = this._imageCache.get(listener.src) || listener.src;
             break;
         }
 
