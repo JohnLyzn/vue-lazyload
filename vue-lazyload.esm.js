@@ -648,6 +648,17 @@ var ImageCache = function () {
   }
 
   createClass(ImageCache, [{
+    key: 'isLocalUrl',
+    value: function isLocalUrl(url) {
+      if(!url) return false; 
+      if(url.indexOf('data:') == 0
+       || url.indexOf('blob:') == 0
+       || url.indexOf('file:') == 0) {
+        return true;
+      }
+      return false;
+    }
+  }, {
     key: 'dataUrl',
     value: function dataUrl(image) {
       var canvas = document.createElement('canvas');
@@ -694,10 +705,10 @@ var ImageCache = function () {
           return;
         }
         this._caches.push(key);
-        this._contentCaches[key] = this.dataUrl(image);
+        this._contentCaches[key] = this.isLocalUrl(url) ? url : this.dataUrl(image);
         if (this._caches.length > this.options.max) {
         this.free();
-        }
+      }
     }
   }, {
     key: 'get',
@@ -814,13 +825,13 @@ var ReactiveListener = function () {
     key: 'update',
     value: function update(_ref2) {
       var src = _ref2.src,
-          handleLazySrc =_ref2.handleLazySrc,
+          lazySrcHandler =_ref2.lazySrcHandler,
           loading = _ref2.loading,
           error = _ref2.error;
 
       var oldSrc = this.src;
       this.src = src;
-      this.handleLazySrc = handleLazySrc;
+      this.lazySrcHandler = lazySrcHandler;
       this.loading = loading;
       this.error = error;
       this.filter();
@@ -1199,6 +1210,7 @@ var Lazy = function (Vue) {
         var _this2 = this;
 
         var _valueFormatter3 = this._valueFormatter(binding.value),
+            lazySrcHandler = _valueFormatter3.lazySrcHandler,
             src = _valueFormatter3.src,
             loading = _valueFormatter3.loading,
             error = _valueFormatter3.error;
@@ -1214,7 +1226,8 @@ var Lazy = function (Vue) {
           exist.update({
             src: src,
             loading: loading,
-            error: error
+            error: error,
+            lazySrcHandler: lazySrcHandler,
           });
         }
         if (this._observer) {
